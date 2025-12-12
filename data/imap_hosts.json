@@ -1,0 +1,17 @@
+{
+  "gmail.com": "imap.gmail.com",
+  "googlemail.com": "imap.gmail.com",
+  "mail.ru": "imap.mail.ru",
+  "inbox.ru": "imap.mail.ru",
+  "list.ru": "imap.mail.ru",
+  "bk.ru": "imap.mail.ru",
+  "yandex.ru": "imap.yandex.ru",
+  "yandex.com": "imap.yandex.com",
+  "ya.ru": "imap.yandex.ru",
+  "outlook.com": "imap-mail.outlook.com",
+  "hotmail.com": "imap-mail.outlook.com",
+  "live.com": "imap-mail.outlook.com",
+  "yahoo.com": "imap.mail.yahoo.com",
+  "rambler.ru": "imap.rambler.ru"
+}
+
