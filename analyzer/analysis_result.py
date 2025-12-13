@@ -92,6 +92,7 @@ class AnalysisResult:
       "unicode_spoofing",      # Unicode спуфинг в теме/имени
       "official_from_free",    # Официальный отправитель с бесплатной почты
       "malicious_urls",        # Известные вредоносные ссылки
+      "html_brand_impersonation",  # Имитация бренда в HTML контенте
     ]
     
     # Критические угрозы - сразу помечаем как спам/фишинг
@@ -122,7 +123,7 @@ class AnalysisResult:
           severe_penalty += abs(check.score)
       
       # НОВОЕ v2.0: Критические проверки - один FAIL = фишинг
-      if check.name in ["unicode_spoofing", "official_from_free", "malicious_urls"]:
+      if check.name in ["unicode_spoofing", "official_from_free", "malicious_urls", "html_brand_impersonation"]:
         if check.status == CheckStatus.FAIL:
           self.is_phishing = True
           self.is_spam = True

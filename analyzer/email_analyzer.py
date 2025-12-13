@@ -216,6 +216,9 @@ class EmailAnalyzer:
     # Проверка известных вредоносных доменов в ссылках
     result.add_check(self._check_malicious_urls(extracted_urls, body_html))
     
+    # КРИТИЧЕСКАЯ ПРОВЕРКА: имитация бренда в HTML контенте с бесплатной почты
+    result.add_check(self._check_html_brand_impersonation(body_html, body_text, sender_domain))
+    
     # Рассчитываем итоговую оценку
     result.calculate_score()
     
@@ -1514,5 +1517,158 @@ class EmailAnalyzer:
       score=0.1,
       title="Ссылки безопасны",
       description=f"Проверено {len(all_urls)} ссылок"
+    )
+  
+  def _check_html_brand_impersonation(self, body_html: str, body_text: str, sender_domain: str) -> CheckResult:
+    """
+    КРИТИЧЕСКАЯ ПРОВЕРКА: Имитация бренда в HTML контенте с бесплатной почты
+    Детектирует письма типа "Google security alert" от gmail.com
+    """
+    if not body_html and not body_text:
+      return CheckResult(
+        name="html_brand_impersonation",
+        status=CheckStatus.INFO,
+        score=0.0,
+        title="Нет контента для анализа",
+        description="Письмо не содержит текста"
+      )
+    
+    is_free_email = sender_domain in self.data.free_email_domains
+    
+    if not is_free_email:
+      return CheckResult(
+        name="html_brand_impersonation",
+        status=CheckStatus.INFO,
+        score=0.0,
+        title="Корпоративный домен",
+        description="Отправитель не с бесплатной почты"
+      )
+    
+    issues = []
+    score = 0.0
+    full_content = (body_html + " " + body_text).lower()
+    
+    # 1. Проверяем наличие логотипов/изображений известных брендов
+    brand_image_patterns = [
+      ('google', [
+        'googlelogo', 'google_logo', 'google-logo',
+        'gstatic.com/images/branding/google',
+        'accounts.google.com',
+        'myaccount.google.com',
+        '/google', 'alt="google"'
+      ]),
+      ('microsoft', [
+        'microsoft', 'outlook', 'office365',
+        'microsoftonline.com', 'azure'
+      ]),
+      ('apple', [
+        'apple.com', 'icloud', 'appleid'
+      ]),
+      ('paypal', [
+        'paypal', 'paypalobjects'
+      ]),
+      ('amazon', [
+        'amazon', 'aws'
+      ]),
+      ('steam', [
+        'steampowered', 'steamcommunity', 'valve'
+      ]),
+      ('facebook', [
+        'facebook', 'fb.com', 'meta'
+      ]),
+    ]
+    
+    detected_brands = set()
+    for brand_name, patterns in brand_image_patterns:
+      for pattern in patterns:
+        if pattern in full_content:
+          detected_brands.add(brand_name)
+          break
+    
+    # 2. Проверяем фишинговые фразы в контенте
+    phishing_content_phrases = [
+      # Угрозы аккаунту
+      'suspicious activity', 'unusual activity', 'unauthorized access',
+      'account has been', 'account will be', 'account is at risk',
+      'security alert', 'security notification', 'security warning',
+      'verify your account', 'confirm your identity', 'update your information',
+      'account suspended', 'account locked', 'account blocked',
+      'password expired', 'password reset required',
+      # Срочность
+      'immediate action', 'urgent action', 'action required',
+      'within 24 hours', 'within 48 hours', 'expires soon',
+      # Призыв к действию
+      'click here', 'click below', 'click the button',
+      'sign in', 'log in', 'verify now', 'confirm now',
+      'check activity', 'review activity', 'secure your account',
+      # Имитация официальности
+      'we have detected', 'we have blocked', 'we have prohibited',
+      'your account activities', 'your google account',
+      'non-google app', 'third party', 'unknown device',
+      # Русские варианты
+      'подозрительная активность', 'необычная активность',
+      'ваш аккаунт', 'подтвердите', 'войдите',
+    ]
+    
+    found_phrases = []
+    for phrase in phishing_content_phrases:
+      if phrase in full_content:
+        found_phrases.append(phrase)
+    
+    # 3. Оцениваем комбинацию факторов
+    
+    # Бренд в контенте + фишинговые фразы + бесплатная почта = 100% ФИШИНГ
+    if detected_brands and found_phrases:
+      brands_str = ', '.join(detected_brands)
+      phrases_str = ', '.join(found_phrases[:3])
+      issues.append(f"Имитация бренда {brands_str} в контенте с {sender_domain}")
+      issues.append(f"Фишинговые фразы: {phrases_str}")
+      score -= 10.0
+      
+      return CheckResult(
+        name="html_brand_impersonation",
+        status=CheckStatus.FAIL,
+        score=score,
+        title=f"ФИШИНГ: имитация {brands_str} в контенте!",
+        description=f"Бренд + фишинговые фразы + бесплатная почта = 100% фишинг",
+        details={
+          "detected_brands": list(detected_brands),
+          "phishing_phrases": found_phrases[:5],
+          "sender_domain": sender_domain,
+          "reason": "HTML контент имитирует известный бренд"
+        }
+      )
+    
+    # Только фишинговые фразы (без явного бренда) - тоже подозрительно
+    if len(found_phrases) >= 3:
+      issues.append(f"Много фишинговых фраз в контенте: {', '.join(found_phrases[:3])}")
+      score -= 3.0
+      
+      return CheckResult(
+        name="html_brand_impersonation",
+        status=CheckStatus.WARN,
+        score=score,
+        title="Подозрительный контент с бесплатной почты",
+        description=f"Найдено {len(found_phrases)} фишинговых фраз",
+        details={"phishing_phrases": found_phrases[:5]}
+      )
+    
+    # Только бренд в контенте (без фраз) - предупреждение
+    if detected_brands:
+      return CheckResult(
+        name="html_brand_impersonation",
+        status=CheckStatus.WARN,
+        score=-1.0,
+        title=f"Упоминание бренда с бесплатной почты",
+        description=f"Обнаружены бренды: {', '.join(detected_brands)}",
+        details={"detected_brands": list(detected_brands)}
+      )
+    
+    return CheckResult(
+      name="html_brand_impersonation",
+      status=CheckStatus.PASS,
+      score=0.1,
+      title="Контент не имитирует бренды",
+      description="Имитация брендов не обнаружена"
     )
 
