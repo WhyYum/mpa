@@ -208,3 +208,5 @@ __marimo__/
 
 accounts.json
 logs/
+old/
+mails/

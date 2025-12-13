@@ -131,8 +131,17 @@ class IMAPClient:
   
   def get_message_uids(self, folder: str = "INBOX", 
                        criteria: str = "ALL", 
-                       limit: int = 50) -> List[str]:
-    """Получить список UID писем"""
+                       limit: int = 0) -> List[str]:
+    """Получить список UID писем
+    
+    Args:
+      folder: Папка для поиска
+      criteria: Критерий поиска (ALL, UNSEEN, etc.)
+      limit: Максимум писем (0 = все письма)
+    
+    Returns:
+      Список UID (новые в конце)
+    """
     if not self.connection:
       return []
     
@@ -143,8 +152,10 @@ class IMAPClient:
         return []
       
       uids = data[0].decode().split()
-      # Возвращаем последние N писем (новые в конце)
-      return uids[-limit:] if limit else uids
+      # limit=0 означает все письма
+      if limit > 0:
+        return uids[-limit:]
+      return uids
     except Exception as e:
       print(f"Ошибка получения UID: {e}")
       return []

@@ -2,118 +2,175 @@
   "brands": {
     "paypal": {
       "name": "PayPal",
-      "domains": ["paypal.com", "paypal.me"],
-      "keywords": ["paypal", "pay pal"]
+      "domains": ["paypal.com", "paypal.me", "paypalobjects.com"],
+      "keywords": ["paypal", "pay pal", "paypa1"]
     },
     "google": {
       "name": "Google",
-      "domains": ["google.com", "google.ru", "gmail.com", "googlemail.com", "youtube.com"],
-      "keywords": ["google", "gmail", "youtube"]
+      "domains": [
+        "google.com", "google.ru", "google.de", "google.fr", "google.co.uk", "google.co.jp",
+        "gmail.com", "googlemail.com", "youtube.com", "android.com", "chromium.org",
+        "gstatic.com", "googleapis.com", "googleusercontent.com", "googlevideo.com",
+        "ggpht.com", "gvt1.com", "gvt2.com", "1e100.net",
+        "accounts.google.com", "myaccount.google.com",
+        "gaia.bounces.google.com", "bounces.google.com", "notifications.google.com"
+      ],
+      "keywords": ["google", "gmail", "youtube", "android", "chrome", "g00gle", "goog1e"]
     },
     "microsoft": {
       "name": "Microsoft",
-      "domains": ["microsoft.com", "outlook.com", "hotmail.com", "live.com", "office.com", "office365.com"],
-      "keywords": ["microsoft", "outlook", "office", "windows", "xbox"]
+      "domains": ["microsoft.com", "outlook.com", "hotmail.com", "live.com", "office.com", "office365.com", "azure.com", "xbox.com", "skype.com", "linkedin.com"],
+      "keywords": ["microsoft", "outlook", "office", "windows", "xbox", "azure", "skype", "micros0ft", "microsft"]
     },
     "apple": {
       "name": "Apple",
-      "domains": ["apple.com", "icloud.com", "me.com", "mac.com"],
-      "keywords": ["apple", "icloud", "itunes", "appstore", "mac", "iphone", "ipad"]
+      "domains": ["apple.com", "icloud.com", "me.com", "mac.com", "itunes.com"],
+      "keywords": ["apple", "icloud", "itunes", "appstore", "mac", "iphone", "ipad", "app1e", "appie"]
     },
     "amazon": {
       "name": "Amazon",
-      "domains": ["amazon.com", "amazon.co.uk", "amazon.de", "amazon.ru", "aws.amazon.com"],
-      "keywords": ["amazon", "aws", "prime"]
+      "domains": ["amazon.com", "amazon.co.uk", "amazon.de", "amazon.fr", "amazon.ru", "amazonaws.com", "aws.amazon.com", "prime.amazon.com"],
+      "keywords": ["amazon", "aws", "prime", "amaz0n", "amazn"]
     },
     "netflix": {
       "name": "Netflix",
-      "domains": ["netflix.com"],
-      "keywords": ["netflix"]
+      "domains": ["netflix.com", "nflxext.com"],
+      "keywords": ["netflix", "netf1ix", "netfiix"]
     },
     "facebook": {
       "name": "Facebook/Meta",
-      "domains": ["facebook.com", "fb.com", "meta.com", "instagram.com", "whatsapp.com"],
-      "keywords": ["facebook", "meta", "instagram", "whatsapp", "messenger"]
+      "domains": ["facebook.com", "fb.com", "meta.com", "instagram.com", "whatsapp.com", "messenger.com", "oculus.com"],
+      "keywords": ["facebook", "meta", "instagram", "whatsapp", "messenger", "faceb00k", "facebok"]
     },
     "twitter": {
       "name": "Twitter/X",
-      "domains": ["twitter.com", "x.com"],
-      "keywords": ["twitter", "tweet"]
+      "domains": ["twitter.com", "x.com", "t.co"],
+      "keywords": ["twitter", "tweet", "x.com"]
     },
     "linkedin": {
       "name": "LinkedIn",
-      "domains": ["linkedin.com"],
-      "keywords": ["linkedin"]
+      "domains": ["linkedin.com", "licdn.com"],
+      "keywords": ["linkedin", "linked in", "1inkedin"]
     },
     "dropbox": {
       "name": "Dropbox",
-      "domains": ["dropbox.com", "dropboxmail.com"],
-      "keywords": ["dropbox"]
+      "domains": ["dropbox.com", "dropboxmail.com", "dropboxusercontent.com"],
+      "keywords": ["dropbox", "dr0pbox"]
+    },
+    "steam": {
+      "name": "Steam",
+      "domains": ["steampowered.com", "steamcommunity.com", "steamgames.com", "steamstatic.com", "help.steampowered.com", "store.steampowered.com", "valvesoftware.com"],
+      "keywords": ["steam", "steampowered", "valve", "st3am", "stearn", "steam support", "steam team"]
+    },
+    "discord": {
+      "name": "Discord",
+      "domains": ["discord.com", "discord.gg", "discordapp.com"],
+      "keywords": ["discord", "disc0rd", "dlscord"]
+    },
+    "telegram": {
+      "name": "Telegram",
+      "domains": ["telegram.org", "t.me", "telegram.me"],
+      "keywords": ["telegram", "te1egram", "teiegram"]
+    },
+    "spotify": {
+      "name": "Spotify",
+      "domains": ["spotify.com", "scdn.co"],
+      "keywords": ["spotify", "sp0tify"]
+    },
+    "ebay": {
+      "name": "eBay",
+      "domains": ["ebay.com", "ebay.co.uk", "ebay.de"],
+      "keywords": ["ebay", "e-bay", "3bay"]
+    },
+    "aliexpress": {
+      "name": "AliExpress",
+      "domains": ["aliexpress.com", "aliexpress.ru", "alibaba.com"],
+      "keywords": ["aliexpress", "alibaba", "ali express"]
     },
     "sberbank": {
       "name": "Сбербанк",
-      "domains": ["sberbank.ru", "online.sberbank.ru", "sber.ru"],
-      "keywords": ["сбербанк", "сбер", "sberbank", "sber"]
+      "domains": ["sberbank.ru", "online.sberbank.ru", "sber.ru", "sbermarket.ru"],
+      "keywords": ["сбербанк", "сбер", "sberbank", "sber", "c6ep", "с6ер"]
     },
     "tinkoff": {
       "name": "Тинькофф",
-      "domains": ["tinkoff.ru", "tbank.ru"],
-      "keywords": ["тинькофф", "tinkoff", "тинькоф"]
+      "domains": ["tinkoff.ru", "tbank.ru", "tinkoffinsurance.ru"],
+      "keywords": ["тинькофф", "tinkoff", "тинькоф", "тиньков", "t-bank"]
     },
     "vtb": {
       "name": "ВТБ",
-      "domains": ["vtb.ru", "vtb24.ru"],
-      "keywords": ["втб", "vtb"]
+      "domains": ["vtb.ru", "vtb24.ru", "vtb-group.ru"],
+      "keywords": ["втб", "vtb", "вт6"]
     },
     "alfabank": {
       "name": "Альфа-Банк",
-      "domains": ["alfabank.ru", "alfa-bank.ru", "alfabank.com"],
-      "keywords": ["альфа-банк", "альфабанк", "alfabank", "alfa-bank"]
+      "domains": ["alfabank.ru", "alfa-bank.ru", "alfabank.com", "alfadirect.ru"],
+      "keywords": ["альфа-банк", "альфабанк", "alfabank", "alfa-bank", "альфа банк"]
+    },
+    "raiffeisen": {
+      "name": "Райффайзен",
+      "domains": ["raiffeisen.ru", "raiffeisenbank.ru"],
+      "keywords": ["райффайзен", "raiffeisen", "raiffaizen"]
+    },
+    "gazprombank": {
+      "name": "Газпромбанк",
+      "domains": ["gazprombank.ru", "gpb.ru"],
+      "keywords": ["газпромбанк", "gazprombank", "gpb"]
     },
     "yandex": {
       "name": "Яндекс",
-      "domains": ["yandex.ru", "yandex.com", "ya.ru", "yandex.net"],
-      "keywords": ["яндекс", "yandex"]
+      "domains": ["yandex.ru", "yandex.com", "ya.ru", "yandex.net", "yandex.by", "yandex.kz"],
+      "keywords": ["яндекс", "yandex", "янде|<с"]
     },
     "mailru": {
       "name": "Mail.ru",
-      "domains": ["mail.ru", "corp.mail.ru", "my.mail.ru"],
-      "keywords": ["mail.ru", "мейл.ру", "мейл"]
+      "domains": ["mail.ru", "corp.mail.ru", "my.mail.ru", "vk.company"],
+      "keywords": ["mail.ru", "мейл.ру", "мейл", "mai1.ru"]
     },
     "vk": {
       "name": "ВКонтакте",
-      "domains": ["vk.com", "vk.ru", "vkontakte.ru"],
-      "keywords": ["вконтакте", "vkontakte", "вк", "vk"]
+      "domains": ["vk.com", "vk.ru", "vkontakte.ru", "userapi.com"],
+      "keywords": ["вконтакте", "vkontakte", "вк", "vk", "v-kontakte"]
     },
     "ozon": {
       "name": "Ozon",
       "domains": ["ozon.ru", "ozon.com"],
-      "keywords": ["ozon", "озон"]
+      "keywords": ["ozon", "озон", "oz0n"]
     },
     "wildberries": {
       "name": "Wildberries",
-      "domains": ["wildberries.ru"],
-      "keywords": ["wildberries", "вайлдберриз", "вб"]
+      "domains": ["wildberries.ru", "wb.ru"],
+      "keywords": ["wildberries", "вайлдберриз", "вб", "wb"]
+    },
+    "avito": {
+      "name": "Авито",
+      "domains": ["avito.ru"],
+      "keywords": ["авито", "avito", "av1to"]
     },
     "gosuslugi": {
       "name": "Госуслуги",
-      "domains": ["gosuslugi.ru", "esia.gosuslugi.ru"],
-      "keywords": ["госуслуги", "gosuslugi", "есиа"]
+      "domains": ["gosuslugi.ru", "esia.gosuslugi.ru", "gu-st.ru"],
+      "keywords": ["госуслуги", "gosuslugi", "есиа", "г0суслуги"]
     },
     "nalog": {
       "name": "ФНС",
-      "domains": ["nalog.ru", "nalog.gov.ru"],
-      "keywords": ["налоговая", "фнс", "nalog"]
+      "domains": ["nalog.ru", "nalog.gov.ru", "npd.nalog.ru"],
+      "keywords": ["налоговая", "фнс", "nalog", "нал0говая"]
+    },
+    "pfr": {
+      "name": "ПФР/СФР",
+      "domains": ["pfr.gov.ru", "sfr.gov.ru", "es.pfrf.ru"],
+      "keywords": ["пенсионный фонд", "пфр", "сфр", "pfr", "sfr"]
     },
     "dhl": {
       "name": "DHL",
-      "domains": ["dhl.com", "dhl.ru"],
-      "keywords": ["dhl"]
+      "domains": ["dhl.com", "dhl.ru", "dhl.de"],
+      "keywords": ["dhl", "dh1"]
     },
     "fedex": {
       "name": "FedEx",
-      "domains": ["fedex.com"],
-      "keywords": ["fedex"]
+      "domains": ["fedex.com", "fedex.ru"],
+      "keywords": ["fedex", "fed-ex", "fedx"]
     },
     "ups": {
       "name": "UPS",
@@ -123,7 +180,42 @@
     "pochta": {
       "name": "Почта России",
       "domains": ["pochta.ru", "russianpost.ru"],
-      "keywords": ["почта россии", "почта", "russianpost"]
+      "keywords": ["почта россии", "russianpost", "п0чта"]
+    },
+    "cdek": {
+      "name": "СДЭК",
+      "domains": ["cdek.ru", "cdek.market"],
+      "keywords": ["сдэк", "cdek", "cdeck"]
+    },
+    "binance": {
+      "name": "Binance",
+      "domains": ["binance.com", "binance.org"],
+      "keywords": ["binance", "b1nance"]
+    },
+    "coinbase": {
+      "name": "Coinbase",
+      "domains": ["coinbase.com"],
+      "keywords": ["coinbase", "c0inbase"]
+    },
+    "blockchain": {
+      "name": "Blockchain",
+      "domains": ["blockchain.com", "blockchain.info"],
+      "keywords": ["blockchain", "block chain", "b1ockchain"]
+    },
+    "qiwi": {
+      "name": "QIWI",
+      "domains": ["qiwi.com", "qiwi.ru"],
+      "keywords": ["qiwi", "киви", "q1wi"]
+    },
+    "webmoney": {
+      "name": "WebMoney",
+      "domains": ["webmoney.ru", "wmtransfer.com"],
+      "keywords": ["webmoney", "вебмани"]
+    },
+    "selectext": {
+      "name": "Selectext",
+      "domains": ["selectext.app", "login.selectext.app"],
+      "keywords": ["selectext"]
     }
   }
 }

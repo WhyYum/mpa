@@ -9,6 +9,8 @@ from typing import List, Dict, Any
 import threading
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from queue import Queue
+import time
 
 from .styles import COLORS, FONTS, PADDING
 from .widgets import StyledButton, StyledLabel, AccountCard, ScrollableFrame
@@ -21,6 +23,9 @@ from imap_client import IMAPClient
 
 # Папка логов
 LOGS_DIR = os.path.join(APP_DIR, "logs")
+
+# Количество параллельных воркеров для анализа
+MAX_WORKERS = 10
 
 
 class MainWindow:
@@ -210,17 +215,19 @@ class MainWindow:
     thread.start()
   
   def _check_worker(self, accounts: List[EmailAccount]):
-    """Рабочий поток проверки с параллельной обработкой"""
-    total_checked = 0
-    total_spam = 0
+    """Рабочий поток проверки с полностью параллельной обработкой"""
+    # Счётчики (thread-safe через Lock)
+    stats_lock = threading.Lock()
+    stats = {"checked": 0, "spam": 0, "total": 0}
     
     # Получаем уже проверенные message_id из логов
-    existing_logs = self.analyzer.get_logs(limit=500)
-    checked_ids = {log.message_id for log in existing_logs}
+    existing_logs = self.analyzer.get_logs(limit=1000)
+    checked_ids = set(log.message_id for log in existing_logs)
+    checked_ids_lock = threading.Lock()
     
     for account in accounts:
       try:
-        self.root.after(0, lambda a=account: self._set_status(f"Проверка {a.email}..."))
+        self.root.after(0, lambda a=account: self._set_status(f"Подключение к {a.email}..."))
         
         client = IMAPClient(account)
         connected, error = client.connect()
@@ -229,56 +236,84 @@ class MainWindow:
           self.root.after(0, lambda a=account: self._set_status(f"Ошибка подключения к {a.email}"))
           continue
         
-        # Получаем только непрочитанные письма
-        uids = client.get_message_uids("INBOX", "UNSEEN", limit=50)
+        # Получаем ВСЕ непрочитанные письма (без лимита)
+        uids = client.get_message_uids("INBOX", "UNSEEN", limit=0)
         
-        # Собираем письма для проверки
-        emails_to_check = []
-        for uid in uids:
-          email_data = client.fetch_email(uid)
-          if not email_data:
-            continue
-          
-          message_id = email_data.get("message_id", "")
-          if message_id in checked_ids:
-            continue
-          
-          emails_to_check.append((uid, email_data))
-          checked_ids.add(message_id)
-        
-        if not emails_to_check:
+        if not uids:
           client.disconnect()
           continue
         
-        self.root.after(0, lambda n=len(emails_to_check): self._set_status(f"Анализ {n} писем..."))
+        self.root.after(0, lambda n=len(uids), a=account: 
+                        self._set_status(f"{a.email}: найдено {n} непрочитанных писем"))
         
-        # Параллельный анализ писем (до 5 одновременно)
-        results_with_uid = []
-        with ThreadPoolExecutor(max_workers=5) as executor:
-          futures = {
-            executor.submit(self._analyze_email, email_data, account.email): uid
-            for uid, email_data in emails_to_check
-          }
+        stats["total"] = len(uids)
+        
+        # Lock для IMAP операций (соединение не thread-safe)
+        imap_lock = threading.Lock()
+        
+        def process_email(uid: str):
+          """Обработать одно письмо: fetch -> analyze -> display -> spam"""
+          nonlocal client, account, checked_ids
           
+          try:
+            # 1. Fetch email (с блокировкой)
+            with imap_lock:
+              email_data = client.fetch_email(uid)
+            
+            if not email_data:
+              return
+            
+            message_id = email_data.get("message_id", "")
+            
+            # Проверяем дубликат (с блокировкой)
+            with checked_ids_lock:
+              if message_id in checked_ids:
+                return
+              checked_ids.add(message_id)
+            
+            # 2. Analyze (параллельно, без блокировки - это CPU)
+            result = self.analyzer.analyze(email_data, account.email)
+            
+            if not result:
+              return
+            
+            # 3. Display result (UI update)
+            with stats_lock:
+              stats["checked"] += 1
+              current = stats["checked"]
+            
+            self.root.after(0, lambda r=result: self.log_viewer.add_log(r))
+            self.root.after(0, lambda c=current, t=stats["total"]: 
+                            self._set_status(f"Проверено {c}/{t} писем..."))
+            
+            # 4. Move to spam if needed (с блокировкой)
+            if result.is_spam or result.is_phishing or result.risk_level == "critical":
+              with imap_lock:
+                moved = client.move_to_spam(uid)
+              
+              if moved:
+                with stats_lock:
+                  stats["spam"] += 1
+                  spam_count = stats["spam"]
+                
+                subj = result.subject[:25] if result.subject else "(без темы)"
+                self.root.after(0, lambda s=subj, n=spam_count: 
+                                self._set_status(f"В спам ({n}): {s}"))
+          
+          except Exception as e:
+            print(f"Ошибка обработки письма {uid}: {e}")
+        
+        # Запускаем параллельную обработку всех писем
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+          # Submit все задачи
+          futures = [executor.submit(process_email, uid) for uid in uids]
+          
+          # Ждём завершения всех
           for future in as_completed(futures):
-            uid = futures[future]
             try:
-              result = future.result()
-              if result:
-                results_with_uid.append((uid, result))
-                total_checked += 1
-                # Добавляем в UI
-                self.root.after(0, lambda r=result: self.log_viewer.add_log(r))
+              future.result()  # Проверяем на исключения
             except Exception as e:
-              print(f"Ошибка анализа: {e}")
-          
-        # Перемещаем спам (последовательно, т.к. IMAP не потокобезопасен)
-        for uid, result in results_with_uid:
-          if result.is_spam or result.is_phishing or result.risk_level == "critical":
-            if client.move_to_spam(uid):
-              total_spam += 1
-              subj = result.subject[:30] if result.subject else "(без темы)"
-              self.root.after(0, lambda s=subj: self._set_status(f"В спам: {s}..."))
+              print(f"Ошибка в worker: {e}")
         
         client.disconnect()
         
@@ -286,7 +321,7 @@ class MainWindow:
         print(f"Ошибка проверки {account.email}: {e}")
     
     # Завершаем
-    self.root.after(0, lambda c=total_checked, s=total_spam: self._finish_check(c, s))
+    self.root.after(0, lambda: self._finish_check(stats["checked"], stats["spam"]))
   
   def _analyze_email(self, email_data: Dict[str, Any], account_email: str):
     """Анализ одного письма (для параллельного выполнения)"""

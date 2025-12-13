@@ -114,6 +114,19 @@ class ContentAnalyzer:
         description="В письме нет ссылок"
       )
     
+    # Получаем официальные домены брендов
+    brand_domains = self.data.get_brand_domains()
+    
+    def is_brand_url(domain: str) -> bool:
+      """Проверить, является ли домен официальным"""
+      domain_lower = domain.lower()
+      if domain_lower in brand_domains:
+        return True
+      for brand_domain in brand_domains:
+        if domain_lower.endswith('.' + brand_domain):
+          return True
+      return False
+    
     issues = []
     suspicious_count = 0
     details = {"total_links": len(all_urls), "issues": []}
@@ -123,10 +136,13 @@ class ContentAnalyzer:
         parsed = urlparse(url)
         domain = parsed.netloc.lower()
         
-        # 1. Проверка URL shorteners (точное совпадение домена или поддомена)
+        # Пропускаем официальные домены брендов
+        if is_brand_url(domain):
+          continue
+        
+        # 1. Проверка URL shorteners
         is_shortener = False
         for shortener in self.URL_SHORTENERS:
-          # domain == shortener ИЛИ domain заканчивается на .shortener
           if domain == shortener or domain.endswith('.' + shortener):
             is_shortener = True
             break
@@ -148,12 +164,7 @@ class ContentAnalyzer:
           suspicious_count += 1
           continue
         
-        # 4. Проверка длинного домена (homograph attack)
-        if len(domain) > 50:
-          issues.append(f"Подозрительно длинный домен")
-          suspicious_count += 1
-        
-        # 5. Проверка Unicode в домене (IDN homograph)
+        # 4. Проверка Unicode в домене (IDN homograph)
         try:
           domain.encode('ascii')
         except UnicodeEncodeError:
@@ -163,7 +174,7 @@ class ContentAnalyzer:
       except Exception:
         continue
     
-    details["issues"] = issues[:10]  # Ограничиваем количество
+    details["issues"] = issues[:10]
     
     if suspicious_count == 0:
       return CheckResult(
@@ -171,7 +182,7 @@ class ContentAnalyzer:
         status=CheckStatus.PASS,
         score=0.1,
         title="Ссылки безопасны",
-        description=f"Проверено {len(all_urls)} ссылок, проблем не найдено",
+        description=f"Проверено {len(all_urls)} ссылок",
         details=details
       )
     elif suspicious_count <= 2:
@@ -353,19 +364,100 @@ class ContentAnalyzer:
   
   def check_brand_impersonation(self, from_email: str, from_name: str, 
                                  subject: str, text: str) -> CheckResult:
-    """Проверить подмену бренда"""
+    """Усиленная проверка подмены бренда"""
     brand_keywords = self.data.get_brand_keywords()
     
     # Извлекаем домен отправителя
     sender_domain = from_email.split('@')[-1].lower() if '@' in from_email else ""
     
-    # Проверяем упоминания брендов в теме и тексте
+    # Проверяем упоминания брендов в теме, имени и тексте
     full_text = f"{from_name} {subject} {text}".lower()
     
     mentioned_brands = set()
+    brand_in_name = set()
+    brand_in_subject = set()
+    
     for keyword, brand_name in brand_keywords.items():
       if keyword in full_text:
         mentioned_brands.add(brand_name)
+      if keyword in from_name.lower():
+        brand_in_name.add(brand_name)
+      if keyword in subject.lower():
+        brand_in_subject.add(brand_name)
+    
+    # === КРИТИЧЕСКИЕ ПРОВЕРКИ ===
+    
+    # 1. Бренд в имени отправителя + бесплатная почта = 100% фишинг
+    is_free_email = sender_domain in self.data.free_email_domains
+    
+    if brand_in_name and is_free_email:
+      return CheckResult(
+        name="brand_impersonation",
+        status=CheckStatus.FAIL,
+        score=-4.0,
+        title="ФИШИНГ: бренд в имени с бесплатной почты!",
+        description=f'"{from_name}" с {sender_domain} - это мошенничество!',
+        details={
+          "from_name": from_name,
+          "sender_domain": sender_domain,
+          "brands_in_name": list(brand_in_name),
+          "reason": "Бренды не отправляют почту с бесплатных сервисов"
+        }
+      )
+    
+    # 2. "Официальное" имя + бесплатная почта = ФИШИНГ
+    official_words = [
+      'support', 'admin', 'security', 'team', 'service', 'help', 
+      'account', 'billing', 'verify', 'notification', 'alert',
+      'customer', 'official', 'helpdesk', 'noreply', 'no-reply',
+      'поддержка', 'служба', 'безопасность', 'команда', 'банк',
+      'уведомление', 'администрация', 'отдел'
+    ]
+    from_name_lower = from_name.lower()
+    
+    has_official_name = any(word in from_name_lower for word in official_words)
+    
+    if has_official_name and is_free_email:
+      return CheckResult(
+        name="brand_impersonation",
+        status=CheckStatus.FAIL,
+        score=-3.5,
+        title="ФИШИНГ: официальное имя с бесплатной почты!",
+        description=f'"{from_name}" отправлено с {sender_domain}',
+        details={
+          "from_name": from_name,
+          "sender_domain": sender_domain,
+          "mentioned_brands": list(mentioned_brands),
+          "reason": "Официальные службы не используют бесплатную почту"
+        }
+      )
+    
+    # 3. Фишинговая тема (Security Alert, Account Suspended) + бесплатная почта
+    phishing_subject_patterns = [
+      'security alert', 'security notification', 'account suspended',
+      'verify your', 'confirm your', 'update your', 'password expired',
+      'unusual activity', 'suspicious activity', 'unauthorized access',
+      'ваш аккаунт', 'подтвердите', 'верификация', 'заблокирован'
+    ]
+    
+    subject_lower = subject.lower()
+    has_phishing_subject = any(p in subject_lower for p in phishing_subject_patterns)
+    
+    if has_phishing_subject and is_free_email and mentioned_brands:
+      return CheckResult(
+        name="brand_impersonation",
+        status=CheckStatus.FAIL,
+        score=-3.5,
+        title="ФИШИНГ: подозрительная тема с упоминанием бренда!",
+        description=f"Тема '{subject[:40]}...' + бренд + бесплатная почта",
+        details={
+          "subject": subject,
+          "mentioned_brands": list(mentioned_brands),
+          "sender_domain": sender_domain
+        }
+      )
+    
+    # === ПРОВЕРКА ЛЕГИТИМНОСТИ ===
     
     if not mentioned_brands:
       return CheckResult(
@@ -376,48 +468,20 @@ class ContentAnalyzer:
         description="В письме не обнаружены упоминания известных брендов"
       )
     
-    # КРИТИЧЕСКАЯ ПРОВЕРКА: "официальное" имя + бесплатная почта = ФИШИНГ
-    official_words = ['support', 'admin', 'security', 'team', 'service', 'help', 
-                      'account', 'billing', 'verify', 'notification', 'alert',
-                      'поддержка', 'служба', 'безопасность', 'команда']
-    from_name_lower = from_name.lower()
-    
-    has_official_name = any(word in from_name_lower for word in official_words)
-    is_free_email = sender_domain in self.data.free_email_domains
-    
-    if has_official_name and is_free_email:
-      # Это явный фишинг - "Google Support" с gmail.com и т.п.
-      return CheckResult(
-        name="brand_impersonation",
-        status=CheckStatus.FAIL,
-        score=-3.0,
-        title="ФИШИНГ: официальное имя с бесплатной почты!",
-        description=f'"{from_name}" отправлено с бесплатной почты {sender_domain}',
-        details={
-          "from_name": from_name,
-          "sender_domain": sender_domain,
-          "mentioned_brands": list(mentioned_brands),
-          "reason": "Официальные службы не используют бесплатную почту"
-        }
-      )
-    
     # Определяем бренд отправителя (с учётом поддоменов)
-    # НО исключаем бесплатные почтовые домены!
     sender_brand = None
     if not is_free_email:
       sender_brand = self._get_brand_for_domain(sender_domain)
     
+    # Проверяем каждый упомянутый бренд
     for brand in mentioned_brands:
-      # Если упоминается бренд, но домен не принадлежит этому бренду
       if brand != sender_brand:
-        # Проверяем, не является ли домен официальным для этого бренда
-        # (исключая бесплатные почтовые домены)
+        # Проверяем, является ли домен официальным для бренда
         is_official = False
         if not is_free_email:
           for brand_id, brand_data in self.data.brands.items():
             if brand_data.get("name") == brand:
               official_domains = brand_data.get("domains", [])
-              # Фильтруем бесплатные домены из списка официальных
               corporate_domains = [d for d in official_domains 
                                    if d not in self.data.free_email_domains]
               if self._is_domain_official(sender_domain, corporate_domains):
@@ -425,20 +489,28 @@ class ContentAnalyzer:
                 break
         
         if not is_official:
+          # Усиленный штраф если бренд в имени или теме
+          penalty = -2.5
+          if brand in brand_in_name:
+            penalty = -3.5
+          elif brand in brand_in_subject:
+            penalty = -3.0
+          
           return CheckResult(
             name="brand_impersonation",
             status=CheckStatus.FAIL,
-            score=-2.5,
-            title="Возможная подмена бренда!",
+            score=penalty,
+            title="Подмена бренда!",
             description=f"Упоминается {brand}, но письмо с домена {sender_domain}",
             details={
               "mentioned_brands": list(mentioned_brands),
               "sender_domain": sender_domain,
-              "expected_domains": self.data.brands.get(brand.lower(), {}).get("domains", [])
+              "brand_in_name": list(brand_in_name),
+              "brand_in_subject": list(brand_in_subject)
             }
           )
     
-    # Если домен соответствует бренду (и это НЕ бесплатная почта)
+    # Бренд подтверждён (домен соответствует)
     if sender_brand and sender_brand in mentioned_brands and not is_free_email:
       return CheckResult(
         name="brand_impersonation",

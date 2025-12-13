@@ -4,6 +4,8 @@
 """
 
 import re
+import time
+import threading
 from typing import Dict, Optional, Tuple, List
 from .analysis_result import CheckResult, CheckStatus
 
@@ -14,11 +16,43 @@ except ImportError:
   HAS_DNS = False
 
 
+class DNSCache:
+  """Кеш DNS запросов с TTL"""
+  
+  def __init__(self, ttl: int = 300):
+    self.cache: Dict[str, Tuple[any, float]] = {}
+    self.ttl = ttl
+    self.lock = threading.Lock()
+  
+  def get(self, key: str) -> Optional[any]:
+    """Получить из кеша"""
+    with self.lock:
+      if key in self.cache:
+        value, timestamp = self.cache[key]
+        if time.time() - timestamp < self.ttl:
+          return value
+        del self.cache[key]
+    return None
+  
+  def set(self, key: str, value: any):
+    """Сохранить в кеш"""
+    with self.lock:
+      self.cache[key] = (value, time.time())
+  
+  def clear(self):
+    """Очистить кеш"""
+    with self.lock:
+      self.cache.clear()
+
+
 class DNSChecker:
   """Проверка DNS записей для аутентификации email"""
   
+  # Глобальный кеш (общий для всех инстансов)
+  _cache = DNSCache(ttl=300)  # 5 минут
+  
   def __init__(self):
-    self.timeout = 5
+    self.timeout = 3  # Уменьшили с 5 до 3 секунд
   
   def check_spf(self, domain: str, sender_ip: str = None) -> CheckResult:
     """Проверить SPF запись"""
@@ -29,6 +63,12 @@ class DNSChecker:
         title="SPF проверка недоступна",
         description="Библиотека dnspython не установлена"
       )
+    
+    # Проверяем кеш
+    cache_key = f"spf:{domain}"
+    cached = self._cache.get(cache_key)
+    if cached is not None:
+      return cached
     
     try:
       # Получаем TXT записи
@@ -73,7 +113,7 @@ class DNSChecker:
       
       # Оцениваем политику
       if policy == '-all':
-        return CheckResult(
+        result = CheckResult(
           name="spf",
           status=CheckStatus.PASS,
           score=0.5,
@@ -82,7 +122,7 @@ class DNSChecker:
           details=details
         )
       elif policy == '~all':
-        return CheckResult(
+        result = CheckResult(
           name="spf",
           status=CheckStatus.PASS,
           score=0.3,
@@ -91,7 +131,7 @@ class DNSChecker:
           details=details
         )
       else:
-        return CheckResult(
+        result = CheckResult(
           name="spf",
           status=CheckStatus.WARN,
           score=0.0,
@@ -99,23 +139,30 @@ class DNSChecker:
           description=f"Нестрогая политика SPF ({policy})",
           details=details
         )
+      
+      self._cache.set(cache_key, result)
+      return result
         
     except dns.resolver.NXDOMAIN:
-      return CheckResult(
+      result = CheckResult(
         name="spf",
         status=CheckStatus.FAIL,
         score=-1.0,
         title="Домен не существует",
         description=f"Домен {domain} не найден в DNS"
       )
+      self._cache.set(cache_key, result)
+      return result
     except dns.resolver.NoAnswer:
-      return CheckResult(
+      result = CheckResult(
         name="spf",
         status=CheckStatus.WARN,
         score=-0.5,
         title="SPF запись отсутствует",
         description=f"Нет TXT записей для {domain}"
       )
+      self._cache.set(cache_key, result)
+      return result
     except Exception as e:
       return CheckResult(
         name="spf",
@@ -134,9 +181,15 @@ class DNSChecker:
         description="Библиотека dnspython не установлена"
       )
     
-    # Типичные селекторы
+    # Проверяем кеш
+    cache_key = f"dkim:{domain}:{selector or 'auto'}"
+    cached = self._cache.get(cache_key)
+    if cached is not None:
+      return cached
+    
+    # Типичные селекторы (уменьшил количество для скорости)
     selectors = [selector] if selector else [
-      'default', 'google', 'selector1', 'selector2', 'k1', 'dkim', 'mail', 's1', 's2'
+      'default', 'google', 'selector1', 'selector2', 'dkim'
     ]
     
     for sel in selectors:
@@ -163,7 +216,7 @@ class DNSChecker:
                 details["key_length_approx"] = key_len
                 
                 if key_len >= 2048:
-                  return CheckResult(
+                  result = CheckResult(
                     name="dkim",
                     status=CheckStatus.PASS,
                     score=0.5,
@@ -171,8 +224,10 @@ class DNSChecker:
                     description=f"Найден DKIM ключ (селектор: {sel})",
                     details=details
                   )
+                  self._cache.set(cache_key, result)
+                  return result
                 elif key_len >= 1024:
-                  return CheckResult(
+                  result = CheckResult(
                     name="dkim",
                     status=CheckStatus.PASS,
                     score=0.3,
@@ -180,8 +235,10 @@ class DNSChecker:
                     description=f"DKIM ключ найден, но рекомендуется 2048 бит",
                     details=details
                   )
+                  self._cache.set(cache_key, result)
+                  return result
             
-            return CheckResult(
+            result = CheckResult(
               name="dkim",
               status=CheckStatus.PASS,
               score=0.3,
@@ -189,20 +246,24 @@ class DNSChecker:
               description=f"Найден DKIM ключ (селектор: {sel})",
               details=details
             )
+            self._cache.set(cache_key, result)
+            return result
             
       except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
         continue
       except Exception:
         continue
     
-    return CheckResult(
+    result = CheckResult(
       name="dkim",
       status=CheckStatus.WARN,
       score=-0.3,
       title="DKIM не найден",
       description=f"Не удалось найти DKIM запись для {domain}",
-      details={"domain": domain, "checked_selectors": selectors[:5]}
+      details={"domain": domain, "checked_selectors": selectors}
     )
+    self._cache.set(cache_key, result)
+    return result
   
   def check_dmarc(self, domain: str) -> CheckResult:
     """Проверить DMARC запись"""
@@ -213,6 +274,12 @@ class DNSChecker:
         title="DMARC проверка недоступна",
         description="Библиотека dnspython не установлена"
       )
+    
+    # Проверяем кеш
+    cache_key = f"dmarc:{domain}"
+    cached = self._cache.get(cache_key)
+    if cached is not None:
+      return cached
     
     dmarc_domain = f"_dmarc.{domain}"
     
@@ -244,7 +311,7 @@ class DNSChecker:
             details["pct"] = int(pct_match.group(1))
           
           if policy == "reject":
-            return CheckResult(
+            result = CheckResult(
               name="dmarc",
               status=CheckStatus.PASS,
               score=0.5,
@@ -253,7 +320,7 @@ class DNSChecker:
               details=details
             )
           elif policy == "quarantine":
-            return CheckResult(
+            result = CheckResult(
               name="dmarc",
               status=CheckStatus.PASS,
               score=0.4,
@@ -262,7 +329,7 @@ class DNSChecker:
               details=details
             )
           else:
-            return CheckResult(
+            result = CheckResult(
               name="dmarc",
               status=CheckStatus.WARN,
               score=0.1,
@@ -270,31 +337,40 @@ class DNSChecker:
               description="Политика none - только мониторинг",
               details=details
             )
+          
+          self._cache.set(cache_key, result)
+          return result
       
-      return CheckResult(
+      result = CheckResult(
         name="dmarc",
         status=CheckStatus.WARN,
         score=-0.3,
         title="DMARC не настроен",
         description=f"DMARC запись не найдена для {domain}"
       )
+      self._cache.set(cache_key, result)
+      return result
       
     except dns.resolver.NXDOMAIN:
-      return CheckResult(
+      result = CheckResult(
         name="dmarc",
         status=CheckStatus.WARN,
         score=-0.3,
         title="DMARC не настроен",
         description=f"DMARC запись отсутствует"
       )
+      self._cache.set(cache_key, result)
+      return result
     except dns.resolver.NoAnswer:
-      return CheckResult(
+      result = CheckResult(
         name="dmarc",
         status=CheckStatus.WARN,
         score=-0.3,
         title="DMARC не настроен",
         description=f"Нет DMARC записи для {domain}"
       )
+      self._cache.set(cache_key, result)
+      return result
     except Exception as e:
       return CheckResult(
         name="dmarc",
@@ -366,6 +442,12 @@ class DNSChecker:
         description="Библиотека dnspython не установлена"
       )
     
+    # Проверяем кеш
+    cache_key = f"mx:{domain}"
+    cached = self._cache.get(cache_key)
+    if cached is not None:
+      return cached
+    
     try:
       answers = dns.resolver.resolve(domain, 'MX', lifetime=self.timeout)
       
@@ -379,7 +461,7 @@ class DNSChecker:
       mx_records.sort(key=lambda x: x["priority"])
       
       if mx_records:
-        return CheckResult(
+        result = CheckResult(
           name="mx",
           status=CheckStatus.PASS,
           score=0.2,
@@ -387,21 +469,27 @@ class DNSChecker:
           description=f"Найдено {len(mx_records)} MX записей",
           details={"domain": domain, "mx_records": mx_records}
         )
+        self._cache.set(cache_key, result)
+        return result
       
-      return CheckResult(
+      result = CheckResult(
         name="mx",
         status=CheckStatus.WARN,
         score=-0.5,
         title="MX записи отсутствуют",
         description=f"Домен {domain} не имеет MX записей"
       )
+      self._cache.set(cache_key, result)
+      return result
       
     except Exception as e:
-      return CheckResult(
+      result = CheckResult(
         name="mx",
         status=CheckStatus.WARN,
         score=-0.3,
         title="Ошибка проверки MX",
         description=str(e)
       )
+      self._cache.set(cache_key, result)
+      return result
 

@@ -73,34 +73,83 @@ class AnalysisResult:
     self.checks.append(check)
   
   def calculate_score(self):
-    """Рассчитать итоговую оценку"""
+    """Рассчитать итоговую оценку с улучшенной логикой v2.0"""
     # Начинаем с 10 баллов
     score = 10.0
     
-    # Сначала проверяем на фишинг (критические проверки)
-    phishing_checks = ["brand_impersonation", "suspicious_links", "credential_harvesting"]
+    # Проверки на фишинг (критические) - ОДИН FAIL = фишинг
+    phishing_checks = [
+      "brand_impersonation",   # Имитация бренда
+      "suspicious_links",      # Подозрительные ссылки
+      "credential_harvesting", # Сбор учётных данных
+      "link_spoofing",         # Подмена ссылок (текст != href)
+      "suspicious_subject",    # Фишинговая тема + имитация бренда
+      "urls_advanced",         # Улучшенная проверка URL
+      "envelope_sender",       # Несоответствие отправителей
+      "reply_to",              # Reply-To мошенничество
+      "suspicious_domains",    # Подозрительные домены
+      # Новые проверки v2.0
+      "unicode_spoofing",      # Unicode спуфинг в теме/имени
+      "official_from_free",    # Официальный отправитель с бесплатной почты
+      "malicious_urls",        # Известные вредоносные ссылки
+    ]
+    
+    # Критические угрозы - сразу помечаем как спам/фишинг
     critical_checks = ["attachments", "html_content"]
-    spam_checks = ["low_context"]  # Проверки на спам
+    
+    # Проверки на спам
+    spam_checks = ["low_context", "received_chain"]
+    
+    # Счётчики для комбинированной логики
+    fail_count = 0
+    warn_count = 0
+    severe_penalty = 0.0
     
     for check in self.checks:
-      # Фишинг
-      if check.name in phishing_checks and check.status == CheckStatus.FAIL:
-        self.is_phishing = True
+      # Подсчёт статусов
+      if check.status == CheckStatus.FAIL:
+        fail_count += 1
+      elif check.status == CheckStatus.WARN:
+        warn_count += 1
+      
+      # Фишинг - проверяем FAIL или жёсткий штраф
+      if check.name in phishing_checks:
+        if check.status == CheckStatus.FAIL:
+          self.is_phishing = True
+          severe_penalty += abs(check.score)
+        elif check.score <= -2.0:
+          self.is_phishing = True
+          severe_penalty += abs(check.score)
+      
+      # НОВОЕ v2.0: Критические проверки - один FAIL = фишинг
+      if check.name in ["unicode_spoofing", "official_from_free", "malicious_urls"]:
+        if check.status == CheckStatus.FAIL:
+          self.is_phishing = True
+          self.is_spam = True
       
       # Критические угрозы (опасные вложения, формы с паролями)
       if check.name in critical_checks and check.status == CheckStatus.FAIL:
         if check.score <= -2.0:
           self.is_spam = True
+          severe_penalty += abs(check.score)
       
-      # Спам (низкий контекст, только ссылки)
+      # Спам (низкий контекст, подозрительная цепочка Received)
       if check.name in spam_checks and check.status == CheckStatus.FAIL:
         self.is_spam = True
+    
+    # Комбинированная детекция: много предупреждений = спам
+    if fail_count >= 3 or (fail_count >= 2 and warn_count >= 3):
+      self.is_spam = True
+    
+    # Если много WARN без FAIL - тоже подозрительно
+    if warn_count >= 5 and fail_count == 0:
+      self.is_spam = True
     
     # Считаем баллы
     for check in self.checks:
       score += check.score
     
-    # Если фишинг или спам - максимум 1 балл (критический уровень, красный цвет)
+    # Если фишинг или спам - максимум 1 балл (критический уровень)
     if self.is_phishing or self.is_spam:
       score = min(score, 1.0)
     
@@ -208,9 +257,10 @@ class AnalysisLogger:
     
     return filepath
   
-  def load_all(self, email_account: str = None, limit: int = 100) -> List[AnalysisResult]:
-    """Загрузить результаты анализа"""
+  def load_all(self, email_account: str = None, limit: int = 1000) -> List[AnalysisResult]:
+    """Загрузить результаты анализа (с дедупликацией по message_id)"""
     results = []
+    seen_message_ids = set()  # Для дедупликации
     
     if email_account:
       account_dirs = [os.path.join(self.logs_dir, self._safe_filename(email_account))]
@@ -233,11 +283,20 @@ class AnalysisLogger:
     # Сортируем по дате (новые первые)
     files.sort(reverse=True)
     
-    for _, filepath in files[:limit]:
+    for _, filepath in files:
+      if len(results) >= limit:
+        break
       try:
         with open(filepath, "r", encoding="utf-8") as f:
           data = json.load(f)
-          results.append(AnalysisResult.from_dict(data))
+          result = AnalysisResult.from_dict(data)
+          
+          # Дедупликация по message_id
+          if result.message_id and result.message_id in seen_message_ids:
+            continue  # Пропускаем дубликат
+          
+          seen_message_ids.add(result.message_id)
+          results.append(result)
       except Exception as e:
         print(f"Ошибка загрузки лога {filepath}: {e}")
     

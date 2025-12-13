@@ -27,6 +27,7 @@ class AnalysisData:
     self.high_risk_tlds: Set[str] = set()
     self.suspicious_substrings: List[str] = []
     self.free_email_domains: Set[str] = set()
+    self.phishing_domain_patterns: List[str] = []
     
     # Известные бренды
     self.brands: Dict[str, Dict[str, Any]] = {}
@@ -61,6 +62,7 @@ class AnalysisData:
     self.high_risk_tlds = set(tld_data.get("high_risk_tlds", []))
     self.suspicious_substrings = tld_data.get("suspicious_substrings", [])
     self.free_email_domains = set(tld_data.get("free_email_domains", []))
+    self.phishing_domain_patterns = tld_data.get("phishing_domain_patterns", [])
     
     # Известные бренды
     brands_data = self._load_json("known_brands.json")
@@ -132,6 +134,16 @@ class AnalysisData:
     Возвращает: (is_suspicious, reasons)
     """
     domain_lower = domain.lower()
+    
+    # СНАЧАЛА проверяем - не является ли это официальным доменом бренда
+    # Если да - сразу возвращаем "безопасно"
+    for brand_id, brand_data in self.brands.items():
+      for official_domain in brand_data.get("domains", []):
+        official_lower = official_domain.lower()
+        # Точное совпадение или поддомен
+        if domain_lower == official_lower or domain_lower.endswith('.' + official_lower):
+          return (False, [])  # Официальный домен = безопасно
+    
     reasons = []
     
     # Проверка TLD
@@ -140,10 +152,11 @@ class AnalysisData:
         reasons.append(f"Подозрительный TLD: {tld}")
         break
     
-    # Проверка подозрительных подстрок
+    # Проверка подозрительных подстрок (только если не бренд)
     for substring in self.suspicious_substrings:
       if substring in domain_lower:
         reasons.append(f"Подозрительная подстрока в домене: {substring}")
+        break
     
     return (len(reasons) > 0, reasons)
 
