@@ -186,10 +186,39 @@ class MainWindow:
     self.log_viewer.pack(fill="both", expand=True)
   
   def _load_logs(self):
-    """Загрузить логи из файлов"""
-    logs = self.analyzer.get_logs(limit=100)
+    """Загрузить логи из файлов (асинхронно)"""
+    # Предотвращаем повторный запуск
+    if hasattr(self, '_loading_logs') and self._loading_logs:
+      return
+    
+    self._loading_logs = True
+    self._set_status("Загрузка логов...")
+    self.log_viewer.show_loading(True)
+    
+    def load_worker():
+      """Воркер загрузки в отдельном потоке"""
+      try:
+        logs = self.analyzer.get_logs(limit=100)
+        # Возвращаем результат в главный поток
+        self.root.after(0, lambda: self._on_logs_loaded(logs))
+      except Exception as e:
+        self.root.after(0, lambda: self._on_logs_error(str(e)))
+    
+    thread = threading.Thread(target=load_worker, daemon=True)
+    thread.start()
+  
+  def _on_logs_loaded(self, logs):
+    """Обработчик завершения загрузки логов"""
+    self._loading_logs = False
+    self.log_viewer.show_loading(False)
     self.log_viewer.set_logs(logs)
     self._set_status(f"Загружено {len(logs)} записей")
+  
+  def _on_logs_error(self, error: str):
+    """Обработчик ошибки загрузки логов"""
+    self._loading_logs = False
+    self.log_viewer.show_loading(False)
+    self._set_status(f"Ошибка загрузки логов: {error}")
   
   def _start_check(self):
     """Запустить проверку писем"""

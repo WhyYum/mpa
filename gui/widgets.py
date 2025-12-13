@@ -325,10 +325,12 @@ class AccountCard(tk.Frame):
 
 
 class ScrollableFrame(tk.Frame):
-  """Прокручиваемый фрейм"""
+  """Прокручиваемый фрейм с автоматическим скрытием скроллбара"""
   
   def __init__(self, parent, **kwargs):
     super().__init__(parent, bg=COLORS["bg_dark"], **kwargs)
+    
+    self._scroll_enabled = False
     
     self.canvas = tk.Canvas(
       self,
@@ -346,7 +348,7 @@ class ScrollableFrame(tk.Frame):
     
     self.scrollable_frame.bind(
       "<Configure>",
-      lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+      lambda e: self._update_scroll_region()
     )
     
     self.canvas_frame = self.canvas.create_window(
@@ -362,19 +364,57 @@ class ScrollableFrame(tk.Frame):
     self.canvas.bind("<Configure>", self._on_canvas_configure)
     
     self.canvas.pack(side="left", fill="both", expand=True)
-    self.scrollbar.pack(side="right", fill="y")
+    # Скроллбар не показываем по умолчанию
+  
+  def _update_scroll_region(self):
+    """Обновить scroll region и проверить нужен ли скролл"""
+    self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+    self._check_scroll_needed()
+  
+  def _check_scroll_needed(self):
+    """Проверить, нужен ли скроллбар"""
+    self.update_idletasks()
+    canvas_height = self.canvas.winfo_height()
+    content_height = self.scrollable_frame.winfo_reqheight()
+    
+    if content_height <= canvas_height:
+      # Контент помещается - скрываем скроллбар и отключаем скролл
+      self._scroll_enabled = False
+      if self.scrollbar.winfo_ismapped():
+        self.scrollbar.pack_forget()
+    else:
+      # Нужен скролл
+      self._scroll_enabled = True
+      if not self.scrollbar.winfo_ismapped():
+        self.scrollbar.pack(side="right", fill="y")
   
   def _on_canvas_configure(self, event):
     self.canvas.itemconfig(self.canvas_frame, width=event.width)
+    self._check_scroll_needed()
   
   def _bind_mousewheel(self, event):
     self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+    # Для Linux
+    self.canvas.bind_all("<Button-4>", self._on_mousewheel_linux)
+    self.canvas.bind_all("<Button-5>", self._on_mousewheel_linux)
   
   def _unbind_mousewheel(self, event):
     self.canvas.unbind_all("<MouseWheel>")
+    self.canvas.unbind_all("<Button-4>")
+    self.canvas.unbind_all("<Button-5>")
   
   def _on_mousewheel(self, event):
-    self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+    # Скроллим только если нужен скролл
+    if self._scroll_enabled:
+      self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+  
+  def _on_mousewheel_linux(self, event):
+    # Скроллим только если нужен скролл
+    if self._scroll_enabled:
+      if event.num == 4:
+        self.canvas.yview_scroll(-1, "units")
+      elif event.num == 5:
+        self.canvas.yview_scroll(1, "units")
   
   def get_frame(self) -> tk.Frame:
     return self.scrollable_frame
