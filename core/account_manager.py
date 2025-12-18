@@ -1,86 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Конфигурация и загрузка аккаунтов
+Менеджер почтовых аккаунтов
 """
 
 import os
 import json
-import base64
-from dataclasses import dataclass
-from typing import List, Dict
+from typing import List
 
-
-# Пути
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(APP_DIR, "data")
-CONFIG_FILE = os.path.join(APP_DIR, "accounts.json")
-
-
-def load_imap_hosts() -> Dict[str, str]:
-  """Загрузить IMAP хосты из JSON файла"""
-  path = os.path.join(DATA_DIR, "imap_hosts.json")
-  try:
-    with open(path, "r", encoding="utf-8") as f:
-      return json.load(f)
-  except Exception as e:
-    print(f"Ошибка загрузки imap_hosts.json: {e}")
-    return {}
-
-
-# IMAP хосты для популярных почтовых сервисов
-IMAP_HOSTS: Dict[str, str] = load_imap_hosts()
-
-# Порты по умолчанию
-DEFAULT_PORTS = {"ssl": 993, "starttls": 143, "none": 25}
-
-# Типы защиты соединения
-SECURITY_TYPES = ["SSL/TLS", "STARTTLS", "Нет"]
-
-
-def encode_password(password: str) -> str:
-  """Кодировать пароль в Base64"""
-  return base64.b64encode(password.encode('utf-8')).decode('utf-8')
-
-
-def decode_password(encoded: str) -> str:
-  """Декодировать пароль из Base64"""
-  try:
-    return base64.b64decode(encoded.encode('utf-8')).decode('utf-8')
-  except Exception:
-    return encoded  # Если не удалось - возвращаем как есть
-
-
-@dataclass
-class EmailAccount:
-  """Почтовый аккаунт"""
-  email: str
-  password: str
-  host: str = ""
-  port: int = 993
-  security: str = "SSL/TLS"  # SSL/TLS, STARTTLS, Нет
-  enabled: bool = True
-  
-  def __post_init__(self):
-    # Автоопределение хоста
-    if not self.host:
-      domain = self.email.split("@")[-1].lower()
-      self.host = IMAP_HOSTS.get(domain, f"imap.{domain}")
-    
-    # Автоопределение порта
-    if self.port == 0:
-      sec_key = {"SSL/TLS": "ssl", "STARTTLS": "starttls", "Нет": "none"}.get(self.security, "ssl")
-      self.port = DEFAULT_PORTS.get(sec_key, 993)
-  
-  @property
-  def use_ssl(self) -> bool:
-    return self.security == "SSL/TLS"
-  
-  @property
-  def use_starttls(self) -> bool:
-    return self.security == "STARTTLS"
-  
-  def __str__(self):
-    return f"{self.email} -> {self.host}:{self.port} ({self.security})"
+from .config import CONFIG_FILE
+from .models import EmailAccount
+from utils.crypto import encode_password, decode_password
 
 
 class AccountManager:

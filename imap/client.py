@@ -10,7 +10,8 @@ from email.utils import parseaddr, parsedate_to_datetime
 from email.message import Message
 from typing import Optional, Union, List, Dict, Any, Tuple
 from datetime import datetime
-from config import EmailAccount
+
+from core.models import EmailAccount
 
 
 class IMAPClient:
@@ -20,7 +21,7 @@ class IMAPClient:
     self.account = account
     self.connection: Optional[Union[imaplib.IMAP4, imaplib.IMAP4_SSL]] = None
   
-  def connect(self) -> bool:
+  def connect(self) -> Tuple[bool, Optional[Exception]]:
     """Подключиться к серверу"""
     try:
       print(f"Подключение к {self.account.host}:{self.account.port}...")
