@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Анализатор почты на фишинг
+Mail Phishing Analyzer - Анализатор почты на фишинг
 """
 
 from gui import MainWindow

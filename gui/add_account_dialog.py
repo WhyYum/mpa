@@ -5,62 +5,19 @@
 
 import tkinter as tk
 from tkinter import ttk
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 import threading
-import json
-import os
 
-try:
-  import dns.resolver
-  HAS_DNS = True
-except ImportError:
-  HAS_DNS = False
-
-from .styles import COLORS, FONTS, PADDING
+from .styles import COLORS, FONTS
 from .widgets import StyledEntry, StyledButton, StyledLabel, StatusLabel, bind_clipboard_hotkeys
-from config import EmailAccount, IMAP_HOSTS, DEFAULT_PORTS, SECURITY_TYPES, DATA_DIR
-from imap_client import IMAPClient
+from core import EmailAccount, DATA_DIR, IMAP_HOSTS, DEFAULT_PORTS, SECURITY_TYPES
+from imap import IMAPClient
+from utils import get_mx_domain, load_error_messages
 
 WINDOW_SIZE = [530, 340, 510]
 
-
-def load_error_messages() -> Dict:
-  """Загрузить сообщения об ошибках из JSON"""
-  path = os.path.join(DATA_DIR, "error_messages.json")
-  try:
-    with open(path, "r", encoding="utf-8") as f:
-      return json.load(f)
-  except Exception:
-    return {"imap_errors": {}, "default_error": "Ошибка подключения", "unknown_error": "Ошибка"}
-
-
-ERROR_MESSAGES = load_error_messages()
-
-
-def get_mx_domain(domain: str) -> Optional[str]:
-  """Получить домен почтового сервера из MX записи"""
-  print(HAS_DNS)
-  if not HAS_DNS:
-    return None
-  
-  try:
-    mx_records = dns.resolver.resolve(domain, 'MX')
-    print(mx_records)
-    
-    # Берём MX с наивысшим приоритетом (наименьшее число)
-    best_mx = min(mx_records, key=lambda x: x.preference)
-    print(best_mx)
-    mx_host = str(best_mx.exchange).rstrip('.')
-    print(mx_host)
-    
-    # Извлекаем базовый домен (mx1.mail.ru -> mail.ru)
-    parts = mx_host.split('.')
-    if len(parts) >= 2:
-      return '.'.join(parts[-2:])
-    return mx_host
-  except Exception as e:
-    print(e.with_traceback())
-    return None
+# Загружаем сообщения об ошибках
+ERROR_MESSAGES = load_error_messages(DATA_DIR)
 
 
 class AddAccountDialog(tk.Toplevel):
@@ -513,4 +470,3 @@ class AddAccountDialog(tk.Toplevel):
       self.continue_btn.pack(side="right")
       self.email_entry.config(state="normal")
       self.password_entry.config(state="normal")
-

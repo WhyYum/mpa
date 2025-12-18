@@ -9,20 +9,15 @@ from typing import List, Dict, Any
 import threading
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from queue import Queue
-import time
 
-from .styles import COLORS, FONTS, PADDING
-from .widgets import StyledButton, StyledLabel, AccountCard, ScrollableFrame
+from .styles import COLORS, FONTS
+from .widgets import StyledButton, AccountCard, ScrollableFrame
 from .add_account_dialog import AddAccountDialog
 from .log_viewer import LogViewer
-from config import AccountManager, EmailAccount, APP_DIR, DATA_DIR
+from core import AccountManager, EmailAccount, DATA_DIR, LOGS_DIR
 from analyzer import EmailAnalyzer
-from imap_client import IMAPClient
+from imap import IMAPClient
 
-
-# Папка логов
-LOGS_DIR = os.path.join(APP_DIR, "logs")
 
 # Количество параллельных воркеров для анализа
 MAX_WORKERS = 10
@@ -436,4 +431,3 @@ class MainWindow:
     """Закрытие приложения"""
     self.account_manager.save()
     self.root.destroy()
-
