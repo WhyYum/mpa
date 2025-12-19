@@ -6,6 +6,7 @@
 from .email_analyzer import EmailAnalyzer
 from .analysis_result import AnalysisResult, CheckResult, CheckStatus, AnalysisLogger
 from .data_loader import AnalysisData
+from .dns_checker import get_mx_domain
 
 __all__ = [
   'EmailAnalyzer', 
@@ -13,6 +14,7 @@ __all__ = [
   'CheckResult', 
   'CheckStatus',
   'AnalysisLogger',
-  'AnalysisData'
+  'AnalysisData',
+  'get_mx_domain'
 ]
 

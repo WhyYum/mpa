@@ -16,6 +16,8 @@ class EmailAccount:
   port: int = 993
   security: str = "SSL/TLS"  # SSL/TLS, STARTTLS, Нет
   enabled: bool = True
+  auto_check: bool = False  # Автоматическая проверка
+  check_interval: int = 30  # Интервал проверки в секундах
   
   def __post_init__(self):
     # Автоопределение хоста

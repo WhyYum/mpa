@@ -12,7 +12,8 @@ from .styles import COLORS, FONTS
 from .widgets import StyledEntry, StyledButton, StyledLabel, StatusLabel, bind_clipboard_hotkeys
 from core import EmailAccount, DATA_DIR, IMAP_HOSTS, DEFAULT_PORTS, SECURITY_TYPES
 from imap import IMAPClient
-from utils import get_mx_domain, load_error_messages
+from analyzer import get_mx_domain
+from utils import load_error_messages
 
 WINDOW_SIZE = [530, 340, 510]
 

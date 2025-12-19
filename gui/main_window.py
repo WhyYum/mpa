@@ -44,6 +44,9 @@ class MainWindow:
     # Флаг проверки
     self.is_checking = False
     
+    # Таймер автопроверки
+    self._auto_check_timer_id = None
+    
     # Создаём интерфейс
     self._create_layout()
     
@@ -52,6 +55,9 @@ class MainWindow:
     
     # Загружаем логи
     self._load_logs()
+    
+    # Запускаем автопроверку если есть аккаунты с auto_check
+    self._start_auto_check_timer()
   
   def _create_layout(self):
     """Создать основной layout"""
@@ -386,7 +392,8 @@ class MainWindow:
         self.accounts_frame.get_frame(),
         account,
         on_toggle=self._on_account_toggle,
-        on_remove=self._on_account_remove
+        on_remove=self._on_account_remove,
+        on_settings_changed=self._on_account_settings_changed
       )
       card.pack(fill="x", pady=5)
   
@@ -413,6 +420,79 @@ class MainWindow:
       self.account_manager.save()
       self._refresh_accounts()
       self._set_status(f"Аккаунт {account.email} удалён")
+      # Обновляем таймер автопроверки
+      self._update_auto_check_timer()
+  
+  def _on_account_settings_changed(self, account: EmailAccount):
+    """Изменение настроек автопроверки аккаунта"""
+    self.account_manager.save()
+    if account.auto_check:
+      self._set_status(f"Автопроверка для {account.email}: каждые {account.check_interval} сек.")
+    else:
+      self._set_status(f"Автопроверка для {account.email} выключена")
+    # Обновляем таймер
+    self._update_auto_check_timer()
+  
+  def _get_min_check_interval(self) -> int:
+    """Получить минимальный интервал проверки среди аккаунтов с автопроверкой"""
+    auto_accounts = self.account_manager.get_auto_check_accounts()
+    if not auto_accounts:
+      return 30  # По умолчанию 30 секунд
+    return min(acc.check_interval for acc in auto_accounts)
+  
+  def _start_auto_check_timer(self):
+    """Запустить таймер автопроверки"""
+    # Отменяем предыдущий таймер если есть
+    if self._auto_check_timer_id:
+      self.root.after_cancel(self._auto_check_timer_id)
+      self._auto_check_timer_id = None
+    
+    # Проверяем есть ли аккаунты с автопроверкой
+    auto_accounts = self.account_manager.get_auto_check_accounts()
+    if auto_accounts:
+      interval_ms = self._get_min_check_interval() * 1000
+      self._auto_check_timer_id = self.root.after(
+        interval_ms, 
+        self._auto_check_tick
+      )
+  
+  def _update_auto_check_timer(self):
+    """Обновить состояние таймера автопроверки"""
+    auto_accounts = self.account_manager.get_auto_check_accounts()
+    
+    if auto_accounts and not self._auto_check_timer_id:
+      # Нужен таймер, но его нет - запускаем
+      self._start_auto_check_timer()
+    elif not auto_accounts and self._auto_check_timer_id:
+      # Таймер есть, но не нужен - останавливаем
+      self.root.after_cancel(self._auto_check_timer_id)
+      self._auto_check_timer_id = None
+  
+  def _auto_check_tick(self):
+    """Тик автопроверки"""
+    auto_accounts = self.account_manager.get_auto_check_accounts()
+    
+    if not auto_accounts:
+      self._auto_check_timer_id = None
+      return
+    
+    # Запускаем проверку только если не идёт ручная проверка
+    if not self.is_checking:
+      self._set_status("Автопроверка...")
+      self.is_checking = True
+      self.check_btn.config(text="Проверка...", state="disabled")
+      
+      # Запускаем проверку только для аккаунтов с auto_check
+      thread = threading.Thread(target=self._check_worker, args=(auto_accounts,))
+      thread.daemon = True
+      thread.start()
+    
+    # Планируем следующий тик с актуальным интервалом
+    interval_ms = self._get_min_check_interval() * 1000
+    self._auto_check_timer_id = self.root.after(
+      interval_ms,
+      self._auto_check_tick
+    )
   
   def _clear_logs(self):
     """Очистить логи"""
@@ -429,5 +509,10 @@ class MainWindow:
   
   def _on_close(self):
     """Закрытие приложения"""
+    # Останавливаем таймер автопроверки
+    if self._auto_check_timer_id:
+      self.root.after_cancel(self._auto_check_timer_id)
+      self._auto_check_timer_id = None
+    
     self.account_manager.save()
     self.root.destroy()

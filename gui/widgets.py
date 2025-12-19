@@ -218,46 +218,213 @@ class StatusLabel(tk.Label):
     self.config(text="", fg=COLORS["text_secondary"])
 
 
+class AutoCheckSettingsDialog(tk.Toplevel):
+  """Диалог настроек автоматической проверки"""
+  
+  def __init__(self, parent, account, on_save: Callable = None):
+    super().__init__(parent)
+    
+    self.account = account
+    self.on_save = on_save
+    
+    self.title(f"Автопроверка — {account.email}")
+    self.configure(bg=COLORS["bg_dark"])
+    self.resizable(False, False)
+    
+    # Размер и позиция
+    width, height = 350, 200
+    x = parent.winfo_rootx() + (parent.winfo_width() - width) // 2
+    y = parent.winfo_rooty() + (parent.winfo_height() - height) // 2
+    self.geometry(f"{width}x{height}+{x}+{y}")
+    
+    self.transient(parent)
+    self.grab_set()
+    
+    self._create_widgets()
+  
+  def _create_widgets(self):
+    # Основной контейнер
+    main = tk.Frame(self, bg=COLORS["bg_dark"], padx=20, pady=15)
+    main.pack(fill="both", expand=True)
+    
+    # Заголовок
+    title = tk.Label(
+      main,
+      text="Настройки автопроверки",
+      bg=COLORS["bg_dark"],
+      fg=COLORS["text_white"],
+      font=FONTS["subtitle"]
+    )
+    title.pack(anchor="w", pady=(0, 15))
+    
+    # Чекбокс включения
+    self.auto_check_var = tk.BooleanVar(value=self.account.auto_check)
+    check_frame = tk.Frame(main, bg=COLORS["bg_dark"])
+    check_frame.pack(fill="x", pady=(0, 10))
+    
+    self.auto_check_cb = tk.Checkbutton(
+      check_frame,
+      text="Включить автоматическую проверку",
+      variable=self.auto_check_var,
+      bg=COLORS["bg_dark"],
+      fg=COLORS["text_primary"],
+      selectcolor=COLORS["bg_medium"],
+      activebackground=COLORS["bg_dark"],
+      activeforeground=COLORS["text_primary"],
+      font=FONTS["body"],
+      command=self._on_auto_check_changed
+    )
+    self.auto_check_cb.pack(side="left")
+    
+    # Интервал проверки
+    interval_frame = tk.Frame(main, bg=COLORS["bg_dark"])
+    interval_frame.pack(fill="x", pady=(0, 20))
+    
+    interval_label = tk.Label(
+      interval_frame,
+      text="Интервал проверки (секунды):",
+      bg=COLORS["bg_dark"],
+      fg=COLORS["text_secondary"],
+      font=FONTS["body"]
+    )
+    interval_label.pack(side="left")
+    
+    self.interval_var = tk.StringVar(value=str(self.account.check_interval))
+    self.interval_entry = tk.Entry(
+      interval_frame,
+      textvariable=self.interval_var,
+      width=6,
+      bg=COLORS["input_bg"],
+      fg=COLORS["text_primary"],
+      insertbackground=COLORS["text_primary"],
+      font=FONTS["body"],
+      relief="flat",
+      justify="center"
+    )
+    self.interval_entry.pack(side="right")
+    
+    # Состояние поля интервала
+    self._update_interval_state()
+    
+    # Кнопки
+    btn_frame = tk.Frame(main, bg=COLORS["bg_dark"])
+    btn_frame.pack(fill="x", side="bottom")
+    
+    save_btn = tk.Button(
+      btn_frame,
+      text="Сохранить",
+      command=self._on_save,
+      bg=COLORS["btn_primary"],
+      fg=COLORS["text_white"],
+      font=FONTS["body"],
+      relief="flat",
+      cursor="hand2",
+      padx=15,
+      pady=5
+    )
+    save_btn.pack(side="right", padx=(10, 0))
+    
+    cancel_btn = tk.Button(
+      btn_frame,
+      text="Отмена",
+      command=self.destroy,
+      bg=COLORS["btn_secondary"],
+      fg=COLORS["text_primary"],
+      font=FONTS["body"],
+      relief="flat",
+      cursor="hand2",
+      padx=15,
+      pady=5
+    )
+    cancel_btn.pack(side="right")
+  
+  def _on_auto_check_changed(self):
+    """Обработчик изменения чекбокса"""
+    self._update_interval_state()
+  
+  def _update_interval_state(self):
+    """Обновить состояние поля интервала"""
+    if self.auto_check_var.get():
+      self.interval_entry.config(state="normal", bg=COLORS["input_bg"])
+    else:
+      self.interval_entry.config(state="disabled", bg=COLORS["bg_medium"])
+  
+  def _on_save(self):
+    """Сохранить настройки"""
+    try:
+      interval = int(self.interval_var.get())
+      if interval < 5:
+        interval = 5  # Минимум 5 секунд
+      elif interval > 3600:
+        interval = 3600  # Максимум 1 час
+    except ValueError:
+      interval = 30
+    
+    self.account.auto_check = self.auto_check_var.get()
+    self.account.check_interval = interval
+    
+    if self.on_save:
+      self.on_save(self.account)
+    
+    self.destroy()
+
+
 class AccountCard(tk.Frame):
   """Карточка аккаунта"""
   
   def __init__(self, parent, account, on_toggle: Callable = None, 
-               on_remove: Callable = None, on_edit: Callable = None):
+               on_remove: Callable = None, on_settings_changed: Callable = None):
     super().__init__(parent, bg=COLORS["bg_light"], padx=12, pady=10)
     
     self.account = account
     self.on_toggle = on_toggle
     self.on_remove = on_remove
-    self.on_edit = on_edit
+    self.on_settings_changed = on_settings_changed
     
     self._create_widgets()
   
   def _create_widgets(self):
-    # Верхняя строка: email + статус
+    # Верхняя строка: email + статусы
     top_row = tk.Frame(self, bg=COLORS["bg_light"])
     top_row.pack(fill="x")
     
-    # Email
-    email_label = tk.Label(
+    # Контейнер для статусов (справа, фиксированная ширина)
+    status_frame = tk.Frame(top_row, bg=COLORS["bg_light"])
+    status_frame.pack(side="right")
+    
+    # Статус (включен/выключен)
+    status_text = "ON" if self.account.enabled else "OFF"
+    status_color = COLORS["success"] if self.account.enabled else COLORS["text_muted"]
+    self.status_label = tk.Label(
+      status_frame,
+      text=status_text,
+      bg=COLORS["bg_light"],
+      fg=status_color,
+      font=("Segoe UI", 10, "bold")
+    )
+    self.status_label.pack(side="left")
+    
+    # Статус автопроверки
+    auto_text = " ⟳" if self.account.auto_check else ""
+    self.auto_label = tk.Label(
+      status_frame,
+      text=auto_text,
+      bg=COLORS["bg_light"],
+      fg=COLORS["info"],
+      font=("Segoe UI", 11)
+    )
+    self.auto_label.pack(side="left")
+    
+    # Email (слева, занимает оставшееся место)
+    self.email_label = tk.Label(
       top_row,
       text=self.account.email,
       bg=COLORS["bg_light"],
       fg=COLORS["text_white"],
-      font=FONTS["body_bold"]
+      font=FONTS["body_bold"],
+      anchor="w"
     )
-    email_label.pack(side="left")
-    
-    # Статус (включен/выключен)
-    status_text = "[ON]" if self.account.enabled else "[OFF]"
-    status_color = COLORS["success"] if self.account.enabled else COLORS["text_muted"]
-    self.status_label = tk.Label(
-      top_row,
-      text=status_text,
-      bg=COLORS["bg_light"],
-      fg=status_color,
-      font=("Segoe UI", 12)
-    )
-    self.status_label.pack(side="right")
+    self.email_label.pack(side="left", fill="x", expand=True)
     
     # Информация о сервере
     info_text = f"{self.account.host}:{self.account.port} ({self.account.security})"
@@ -266,9 +433,10 @@ class AccountCard(tk.Frame):
       text=info_text,
       bg=COLORS["bg_light"],
       fg=COLORS["text_secondary"],
-      font=FONTS["small"]
+      font=FONTS["small"],
+      anchor="w"
     )
-    info_label.pack(anchor="w", pady=(2, 8))
+    info_label.pack(fill="x", pady=(2, 8))
     
     # Кнопки
     btn_frame = tk.Frame(self, bg=COLORS["bg_light"])
@@ -288,7 +456,24 @@ class AccountCard(tk.Frame):
       padx=8,
       pady=2
     )
-    self.toggle_btn.pack(side="left", padx=(0, 5))
+    self.toggle_btn.pack(side="left", padx=(0, 3))
+    
+    # Кнопка настроек (шестерёнка)
+    settings_bg = COLORS["info"] if self.account.auto_check else COLORS["bg_medium"]
+    settings_fg = COLORS["text_white"] if self.account.auto_check else COLORS["text_primary"]
+    self.settings_btn = tk.Button(
+      btn_frame,
+      text="⚙",
+      command=self._open_settings,
+      bg=settings_bg,
+      fg=settings_fg,
+      font=FONTS["small"],
+      relief="flat",
+      cursor="hand2",
+      padx=6,
+      pady=2
+    )
+    self.settings_btn.pack(side="left", padx=(0, 3))
     
     # Удалить
     remove_btn = tk.Button(
@@ -307,17 +492,43 @@ class AccountCard(tk.Frame):
   
   def _on_toggle(self):
     self.account.enabled = not self.account.enabled
-    
-    # Обновляем UI
-    if self.account.enabled:
-      self.status_label.config(text="[ON]", fg=COLORS["success"])
-      self.toggle_btn.config(text="Выключить")
-    else:
-      self.status_label.config(text="[OFF]", fg=COLORS["text_muted"])
-      self.toggle_btn.config(text="Включить")
+    self._update_ui()
     
     if self.on_toggle:
       self.on_toggle(self.account)
+  
+  def _open_settings(self):
+    """Открыть диалог настроек автопроверки"""
+    dialog = AutoCheckSettingsDialog(
+      self.winfo_toplevel(),
+      self.account,
+      on_save=self._on_settings_saved
+    )
+  
+  def _on_settings_saved(self, account):
+    """Обработчик сохранения настроек"""
+    self._update_ui()
+    
+    if self.on_settings_changed:
+      self.on_settings_changed(account)
+  
+  def _update_ui(self):
+    """Обновить UI карточки"""
+    # Статус включения
+    if self.account.enabled:
+      self.status_label.config(text="ON", fg=COLORS["success"])
+      self.toggle_btn.config(text="Выключить")
+    else:
+      self.status_label.config(text="OFF", fg=COLORS["text_muted"])
+      self.toggle_btn.config(text="Включить")
+    
+    # Статус автопроверки
+    if self.account.auto_check:
+      self.auto_label.config(text=" ⟳")
+      self.settings_btn.config(bg=COLORS["info"], fg=COLORS["text_white"])
+    else:
+      self.auto_label.config(text="")
+      self.settings_btn.config(bg=COLORS["bg_medium"], fg=COLORS["text_primary"])
   
   def _on_remove(self):
     if self.on_remove:

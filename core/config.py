@@ -11,7 +11,6 @@ DATA_DIR = os.path.join(APP_DIR, "data")
 LOGS_DIR = os.path.join(APP_DIR, "logs")
 CONFIG_FILE = os.path.join(APP_DIR, "accounts.json")
 
-
 def _load_imap_hosts() -> dict:
   """Загрузить IMAP хосты из JSON файла"""
   import json
@@ -32,4 +31,7 @@ DEFAULT_PORTS = {"ssl": 993, "starttls": 143, "none": 25}
 
 # Типы защиты соединения
 SECURITY_TYPES = ["SSL/TLS", "STARTTLS", "Нет"]
+
+# DNS серверы для проверок (публичные, чтобы не зависеть от DNS провайдера)
+DNS_SERVERS = ["8.8.8.8", "1.1.1.1"]
 

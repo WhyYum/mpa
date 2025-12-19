@@ -8,12 +8,50 @@ import time
 import threading
 from typing import Dict, Optional, Tuple, List
 from .analysis_result import CheckResult, CheckStatus
+from core.config import DNS_SERVERS
 
 try:
   import dns.resolver
   HAS_DNS = True
 except ImportError:
   HAS_DNS = False
+
+
+def get_resolver() -> "dns.resolver.Resolver":
+  """Создать DNS резолвер с публичными DNS серверами"""
+  resolver = dns.resolver.Resolver()
+  resolver.nameservers = DNS_SERVERS
+  return resolver
+
+
+def get_mx_domain(domain: str) -> Optional[str]:
+  """
+  Получить домен почтового сервера из MX записи.
+  
+  Args:
+    domain: Домен для проверки (например, "gmail.com")
+    
+  Returns:
+    Базовый домен MX сервера (например, "google.com") или None
+  """
+  if not HAS_DNS:
+    return None
+  
+  try:
+    resolver = get_resolver()
+    mx_records = resolver.resolve(domain, 'MX', lifetime=3)
+    
+    # Берём MX с наивысшим приоритетом (наименьшее число)
+    best_mx = min(mx_records, key=lambda x: x.preference)
+    mx_host = str(best_mx.exchange).rstrip('.')
+    
+    # Извлекаем базовый домен (mx1.mail.ru -> mail.ru)
+    parts = mx_host.split('.')
+    if len(parts) >= 2:
+      return '.'.join(parts[-2:])
+    return mx_host
+  except Exception:
+    return None
 
 
 class DNSCache:
@@ -53,6 +91,7 @@ class DNSChecker:
   
   def __init__(self):
     self.timeout = 3  # Уменьшили с 5 до 3 секунд
+    self.resolver = get_resolver()
   
   def check_spf(self, domain: str, sender_ip: str = None) -> CheckResult:
     """Проверить SPF запись"""
@@ -72,7 +111,7 @@ class DNSChecker:
     
     try:
       # Получаем TXT записи
-      answers = dns.resolver.resolve(domain, 'TXT', lifetime=self.timeout)
+      answers = self.resolver.resolve(domain, 'TXT', lifetime=self.timeout)
       spf_record = None
       
       for rdata in answers:
@@ -195,7 +234,7 @@ class DNSChecker:
     for sel in selectors:
       dkim_domain = f"{sel}._domainkey.{domain}"
       try:
-        answers = dns.resolver.resolve(dkim_domain, 'TXT', lifetime=self.timeout)
+        answers = self.resolver.resolve(dkim_domain, 'TXT', lifetime=self.timeout)
         
         for rdata in answers:
           txt = str(rdata).strip('"').replace('" "', '')
@@ -284,7 +323,7 @@ class DNSChecker:
     dmarc_domain = f"_dmarc.{domain}"
     
     try:
-      answers = dns.resolver.resolve(dmarc_domain, 'TXT', lifetime=self.timeout)
+      answers = self.resolver.resolve(dmarc_domain, 'TXT', lifetime=self.timeout)
       
       for rdata in answers:
         txt = str(rdata).strip('"')
@@ -401,7 +440,7 @@ class DNSChecker:
         )
       
       ptr_domain = f"{'.'.join(reversed(parts))}.in-addr.arpa"
-      answers = dns.resolver.resolve(ptr_domain, 'PTR', lifetime=self.timeout)
+      answers = self.resolver.resolve(ptr_domain, 'PTR', lifetime=self.timeout)
       
       hostnames = [str(rdata).rstrip('.') for rdata in answers]
       
@@ -449,7 +488,7 @@ class DNSChecker:
       return cached
     
     try:
-      answers = dns.resolver.resolve(domain, 'MX', lifetime=self.timeout)
+      answers = self.resolver.resolve(domain, 'MX', lifetime=self.timeout)
       
       mx_records = []
       for rdata in answers:

@@ -37,7 +37,9 @@ class AccountManager:
           host=acc_data.get("host", ""),
           port=acc_data.get("port", 0),
           security=acc_data.get("security", "SSL/TLS"),
-          enabled=acc_data.get("enabled", True)
+          enabled=acc_data.get("enabled", True),
+          auto_check=acc_data.get("auto_check", False),
+          check_interval=acc_data.get("check_interval", 30)
         )
         self.accounts.append(account)
       
@@ -59,7 +61,9 @@ class AccountManager:
             "host": acc.host,
             "port": acc.port,
             "security": acc.security,
-            "enabled": acc.enabled
+            "enabled": acc.enabled,
+            "auto_check": acc.auto_check,
+            "check_interval": acc.check_interval
           }
           for acc in self.accounts
         ]
@@ -84,6 +88,10 @@ class AccountManager:
   def get_enabled_accounts(self) -> List[EmailAccount]:
     """Получить активные аккаунты"""
     return [acc for acc in self.accounts if acc.enabled]
+  
+  def get_auto_check_accounts(self) -> List[EmailAccount]:
+    """Получить аккаунты с включённой автопроверкой"""
+    return [acc for acc in self.accounts if acc.enabled and acc.auto_check]
   
   def print_accounts(self):
     """Вывести аккаунты в консоль"""
